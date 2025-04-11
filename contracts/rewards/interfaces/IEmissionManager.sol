@@ -89,6 +89,14 @@ interface IEmissionManager {
   function setClaimer(address user, address claimer) external;
 
   /**
+   * @dev Sets whether a specific user is excluded from rewards.
+   * @dev Only callable by the owner of the EmissionManager
+   * @param user The wallet address to update.
+   * @param excluded True to exclude the wallet (clearing its accrued rewards), false to include it.
+   */
+  function setExcludedFromRewards(address user, bool excluded) external;
+
+  /**
    * @dev Updates the admin of the reward emission
    * @dev Only callable by the owner of the EmissionManager
    * @param reward The address of the reward token

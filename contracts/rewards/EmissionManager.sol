@@ -86,6 +86,11 @@ contract EmissionManager is Ownable, IEmissionManager {
   }
 
   /// @inheritdoc IEmissionManager
+  function setExcludedFromRewards(address user, bool excluded) external onlyOwner {
+    _rewardsController.setExcludedFromRewards(user, excluded);
+  }
+
+  /// @inheritdoc IEmissionManager
   function setEmissionAdmin(address reward, address admin) external override onlyOwner {
     address oldAdmin = _emissionAdmins[reward];
     _emissionAdmins[reward] = admin;

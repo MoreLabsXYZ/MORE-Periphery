@@ -50,6 +50,13 @@ interface IRewardsController is IRewardsDistributor {
   event RewardOracleUpdated(address indexed reward, address indexed rewardOracle);
 
   /**
+   * @dev Emitted when the specific address is excluded from rewards
+   * @param user The address of the user
+   * @param excluded True if the user is excluded from rewards, false otherwise
+   */
+  event ExclusionUpdated(address indexed user, bool excluded);
+
+  /**
    * @dev Whitelists an address to claim the rewards on behalf of another address
    * @param user The address of the user
    * @param claimer The address of the claimer
@@ -73,6 +80,13 @@ interface IRewardsController is IRewardsDistributor {
    * @param rewardOracle The address of price aggregator that follows IEACAggregatorProxy interface
    */
   function setRewardOracle(address reward, IEACAggregatorProxy rewardOracle) external;
+
+  /**
+   * @dev Allows the emission manager to set whether a wallet is excluded from rewards.
+   * @param user The wallet address to update.
+   * @param excluded True to exclude the wallet (clearing its accrued rewards), false to include it.
+   */
+  function setExcludedFromRewards(address user, bool excluded) external;
 
   /**
    * @dev Get the price aggregator oracle address
