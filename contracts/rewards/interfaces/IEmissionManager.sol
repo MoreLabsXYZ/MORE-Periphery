@@ -92,6 +92,7 @@ interface IEmissionManager {
    * @dev Sets whether a specific user is excluded from rewards.
    * @dev Only callable by the owner of the EmissionManager
    * @param user The wallet address to update.
+   * @param asset The asset to incentivize.
    * @param excluded True to exclude the wallet (clearing its accrued rewards), false to include it.
    */
   function setExcludedFromRewards(address user, address asset, bool excluded) external;

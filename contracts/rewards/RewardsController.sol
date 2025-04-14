@@ -36,9 +36,12 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
   // a check to see if the provided reward oracle contains `latestAnswer`.
   mapping(address => IEACAggregatorProxy) internal _rewardOracle;
 
-  // ================ Exclusion logic =============== //
+  // This mapping stores whether a specific user is excluded from receiving rewards for a particular asset.
   mapping(address => mapping(address => bool)) internal _excludedFromRewards;
+  // This mapping contains the list of excluded addresses per asset.
   mapping(address => address[]) internal _excludedAddresses;
+  // This mapping contains the index of the excluded address in the `_excludedAddresses` array.
+  mapping(address => mapping(address => uint256)) internal _excludedAddressIndex;
 
   modifier onlyAuthorizedClaimers(address claimer, address user) {
     require(_authorizedClaimers[user] == claimer, 'CLAIMER_UNAUTHORIZED');
@@ -119,10 +122,24 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
   }
 
   /// @inheritdoc IRewardsController
-  function setExcludedFromRewards(address user, address asset, bool excluded) external onlyEmissionManager {
-    // If excluding and not already in the list, add the address and clear rewards.
+  function setExcludedFromRewards(
+    address user,
+    address asset,
+    bool excluded
+  ) external onlyEmissionManager {
     if (excluded && !_excludedFromRewards[user][asset]) {
+      // If excluding and not already in the list, add the address.
+      _excludedAddressIndex[user][asset] = _excludedAddresses[asset].length;
       _excludedAddresses[asset].push(user);
+    } else if (!excluded && _excludedFromRewards[user][asset]) {
+      // If including and already in the list, remove the address from the list.
+      uint256 index = _excludedAddressIndex[user][asset];
+      uint256 lastIndex = _excludedAddresses[asset].length - 1;
+      address lastUser = _excludedAddresses[asset][lastIndex];
+      _excludedAddresses[asset][index] = lastUser;
+      _excludedAddressIndex[lastUser][asset] = index;
+      _excludedAddresses[asset].pop();
+      delete _excludedAddressIndex[user][asset];
     }
     _excludedFromRewards[user][asset] = excluded;
 
