@@ -86,8 +86,8 @@ contract EmissionManager is Ownable, IEmissionManager {
   }
 
   /// @inheritdoc IEmissionManager
-  function setExcludedFromRewards(address user, bool excluded) external onlyOwner {
-    _rewardsController.setExcludedFromRewards(user, excluded);
+  function setExcludedFromRewards(address user, address asset, bool excluded) external onlyOwner {
+    _rewardsController.setExcludedFromRewards(user, asset, excluded);
   }
 
   /// @inheritdoc IEmissionManager
