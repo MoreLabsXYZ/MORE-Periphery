@@ -94,7 +94,6 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
     RewardsDataTypes.RewardsConfigInput[] memory config
   ) external override onlyEmissionManager {
     for (uint256 i = 0; i < config.length; i++) {
-      // config[i].totalSupply = IScaledBalanceToken(config[i].asset).scaledTotalSupply();
       config[i].totalSupply = _getAdjustedTotalSupply(config[i].asset);
       // Install TransferStrategy logic at IncentivesController
       _installTransferStrategy(config[i].reward, config[i].transferStrategy);
@@ -152,6 +151,7 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
     if (_excludedFromRewards[user][msg.sender]) {
       return;
     }
+    totalSupply = _getAdjustedTotalSupply(msg.sender);
     _updateData(msg.sender, user, userBalance, totalSupply);
   }
 
@@ -237,11 +237,9 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
     address user
   ) internal view override returns (RewardsDataTypes.UserAssetBalance[] memory userAssetBalances) {
     userAssetBalances = new RewardsDataTypes.UserAssetBalance[](assets.length);
-    for (uint256 i = 0; i < assets.length; i++) {
+    for (uint256 i = 0; i < assets.length;) {
       address asset = assets[i];
       userAssetBalances[i].asset = asset;
-      /* (userAssetBalances[i].userBalance, userAssetBalances[i].totalSupply) = IScaledBalanceToken(assets[i])
-          .getScaledUserBalanceAndSupply(user); */
       if (_excludedFromRewards[user][asset]) {
         // Excluded users: set userBalance to 0 so that no new rewards accrue.
         userAssetBalances[i].userBalance = 0;
@@ -249,6 +247,9 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
         userAssetBalances[i].userBalance = IScaledBalanceToken(asset).scaledBalanceOf(user);
       }
       userAssetBalances[i].totalSupply = _getAdjustedTotalSupply(asset);
+      unchecked {
+        ++i;
+      }
     }
     return userAssetBalances;
   }
@@ -414,16 +415,22 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
     uint256 totalSupply = IScaledBalanceToken(asset).scaledTotalSupply();
     uint256 excludedSupply = 0;
     uint256 len = _excludedAddresses[asset].length;
-    for (uint256 i = 0; i < len; i++) {
+    for (uint256 i = 0; i < len;) {
       // Only include an address if it's still excluded.
       address excludedAddress = _excludedAddresses[asset][i];
       if (_excludedFromRewards[excludedAddress][asset]) {
         excludedSupply += IScaledBalanceToken(asset).scaledBalanceOf(excludedAddress);
       }
+
+      unchecked {
+        ++i;
+      }
     }
     // Guard against underflow (in case all supply is excluded)
     if (totalSupply > excludedSupply) {
-      adjustedTotalSupply = totalSupply - excludedSupply;
+      unchecked {
+        adjustedTotalSupply = totalSupply - excludedSupply;
+      }
     } else {
       adjustedTotalSupply = 0;
     }

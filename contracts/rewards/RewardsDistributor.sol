@@ -63,7 +63,6 @@ abstract contract RewardsDistributor is IRewardsDistributor {
     return
       _getAssetIndex(
         rewardData,
-        // IScaledBalanceToken(asset).scaledTotalSupply(),
         _getAdjustedTotalSupply(asset),
         10 ** _assets[asset].decimals
       );
@@ -197,7 +196,6 @@ abstract contract RewardsDistributor is IRewardsDistributor {
 
       (uint256 newIndex, ) = _updateRewardData(
         rewardConfig,
-        // IScaledBalanceToken(asset).scaledTotalSupply(),
         _getAdjustedTotalSupply(asset),
         10 ** decimals
       );
