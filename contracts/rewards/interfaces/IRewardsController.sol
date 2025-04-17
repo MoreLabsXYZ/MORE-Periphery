@@ -50,6 +50,13 @@ interface IRewardsController is IRewardsDistributor {
   event RewardOracleUpdated(address indexed reward, address indexed rewardOracle);
 
   /**
+   * @dev Emitted when the specific address is excluded from rewards
+   * @param user The address of the user
+   * @param excluded True if the user is excluded from rewards, false otherwise
+   */
+  event ExclusionUpdated(address indexed user, address indexed asset, bool excluded);
+
+  /**
    * @dev Whitelists an address to claim the rewards on behalf of another address
    * @param user The address of the user
    * @param claimer The address of the claimer
@@ -75,6 +82,14 @@ interface IRewardsController is IRewardsDistributor {
   function setRewardOracle(address reward, IEACAggregatorProxy rewardOracle) external;
 
   /**
+   * @dev Allows the emission manager to set whether a wallet is excluded from rewards.
+   * @param user The wallet address to update.
+   * @param asset The address of the asset.
+   * @param excluded True to exclude the wallet (clearing its accrued rewards), false to include it.
+   */
+  function setExcludedFromRewards(address user, address asset, bool excluded) external;
+
+  /**
    * @dev Get the price aggregator oracle address
    * @param reward The address of the reward
    * @return The price oracle of the reward
@@ -94,6 +109,20 @@ interface IRewardsController is IRewardsDistributor {
    * @return The address of the TransferStrategy contract
    */
   function getTransferStrategy(address reward) external view returns (address);
+
+  /**
+   * @dev Returns true if the user is excluded from rewards.
+   * @param user The address of the user
+   * @param asset The address of asset
+   */
+  function isExcludedFromRewards(address user, address asset) external view returns (bool);
+
+  /**
+   * @dev Returns the list of excluded addresses for a specific asset
+   * @param asset The address of the asset
+   * @return The list of excluded addresses
+   */
+  function getExcludedAddresses(address asset) external view returns (address[] memory);
 
   /**
    * @dev Configure assets to incentivize with an emission of rewards per second until the end of distribution.

@@ -3,7 +3,8 @@ import { accounts } from './helpers/test-wallets';
 import { NETWORKS_RPC_URL } from './helper-hardhat-config';
 
 import '@nomiclabs/hardhat-ethers';
-import '@nomiclabs/hardhat-etherscan';
+// import '@nomiclabs/hardhat-etherscan';
+import "@nomicfoundation/hardhat-verify";
 import '@nomicfoundation/hardhat-chai-matchers';
 import '@typechain/hardhat';
 import '@tenderly/hardhat-tenderly';
@@ -85,6 +86,40 @@ const config: HardhatUserConfig = {
         count: 20,
       },
     },
+    flowTestnet: {
+      url: "https://testnet.evm.nodes.onflow.org",
+      chainId: 545,
+      accounts: [process.env.PRIVATE_KEY as string]
+    },
+    flow: {
+      url: "https://mainnet.evm.nodes.onflow.org",
+      chainId: 747,
+      accounts: [process.env.PRIVATE_KEY as string]
+    }
+  },
+  etherscan: {
+    apiKey: {
+      flow: "abc",
+      flowTestnet: "abc"
+    },
+    customChains: [
+      {
+        network: "flowTestnet",
+        chainId: 545,
+        urls: {
+          apiURL: "https://evm-testnet.flowscan.io/api",
+          browserURL: "https://evm-testnet.flowscan.io/",
+        }
+      },
+      {
+        network: "flow",
+        chainId: 747,
+        urls: {
+          apiURL: "https://evm.flowscan.io/api",
+          browserURL: "https://evm.flowscan.io/",
+        }
+      }
+    ]
   },
   mocha: {
     timeout: 80000,

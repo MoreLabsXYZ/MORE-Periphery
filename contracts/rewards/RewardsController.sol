@@ -18,7 +18,7 @@ import {IEACAggregatorProxy} from '../misc/interfaces/IEACAggregatorProxy.sol';
 contract RewardsController is RewardsDistributor, VersionedInitializable, IRewardsController {
   using SafeCast for uint256;
 
-  uint256 public constant REVISION = 1;
+  uint256 public constant REVISION = 2;
 
   // This mapping allows whitelisted addresses to claim on behalf of others
   // useful for contracts that hold tokens to be rewarded but don't have any native logic to claim Liquidity Mining rewards
@@ -35,6 +35,13 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
   // At the moment of reward configuration, the Incentives Controller performs
   // a check to see if the provided reward oracle contains `latestAnswer`.
   mapping(address => IEACAggregatorProxy) internal _rewardOracle;
+
+  // This mapping stores whether a specific user is excluded from receiving rewards for a particular asset.
+  mapping(address => mapping(address => bool)) internal _excludedFromRewards;
+  // This mapping contains the list of excluded addresses per asset.
+  mapping(address => address[]) internal _excludedAddresses;
+  // This mapping contains the index of the excluded address in the `_excludedAddresses` array.
+  mapping(address => mapping(address => uint256)) internal _excludedAddressIndex;
 
   modifier onlyAuthorizedClaimers(address claimer, address user) {
     require(_authorizedClaimers[user] == claimer, 'CLAIMER_UNAUTHORIZED');
@@ -73,13 +80,21 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
   }
 
   /// @inheritdoc IRewardsController
+  function isExcludedFromRewards(address user, address asset) external view returns (bool) {
+    return _excludedFromRewards[user][asset];
+  }
+
+  /// @inheritdoc IRewardsController
+  function getExcludedAddresses(address asset) external view returns (address[] memory) {
+    return _excludedAddresses[asset];
+  }
+
+  /// @inheritdoc IRewardsController
   function configureAssets(
     RewardsDataTypes.RewardsConfigInput[] memory config
   ) external override onlyEmissionManager {
     for (uint256 i = 0; i < config.length; i++) {
-      // Get the current Scaled Total Supply of AToken or Debt token
-      config[i].totalSupply = IScaledBalanceToken(config[i].asset).scaledTotalSupply();
-
+      config[i].totalSupply = _getAdjustedTotalSupply(config[i].asset);
       // Install TransferStrategy logic at IncentivesController
       _installTransferStrategy(config[i].reward, config[i].transferStrategy);
 
@@ -106,7 +121,40 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
   }
 
   /// @inheritdoc IRewardsController
+  function setExcludedFromRewards(
+    address user,
+    address asset,
+    bool excluded
+  ) external onlyEmissionManager {
+    if (excluded && !_excludedFromRewards[user][asset]) {
+      uint256 userBalance = IScaledBalanceToken(asset).scaledBalanceOf(user);
+      _updateData(asset, user, userBalance, _getAdjustedTotalSupply(asset));
+      // If excluding and not already in the list, add the address.
+      _excludedAddressIndex[user][asset] = _excludedAddresses[asset].length;
+      _excludedAddresses[asset].push(user);
+    } else if (!excluded && _excludedFromRewards[user][asset]) {
+      _updateData(asset, user, 0, _getAdjustedTotalSupply(asset));
+      // If including and already in the list, remove the address from the list.
+      uint256 index = _excludedAddressIndex[user][asset];
+      uint256 lastIndex = _excludedAddresses[asset].length - 1;
+      address lastUser = _excludedAddresses[asset][lastIndex];
+      _excludedAddresses[asset][index] = lastUser;
+      _excludedAddressIndex[lastUser][asset] = index;
+      _excludedAddresses[asset].pop();
+      delete _excludedAddressIndex[user][asset];
+    }
+    _excludedFromRewards[user][asset] = excluded;
+
+    emit ExclusionUpdated(user, asset, excluded);
+  }
+
+  /// @inheritdoc IRewardsController
   function handleAction(address user, uint256 totalSupply, uint256 userBalance) external override {
+    // Skip updating rewards for excluded users.
+    if (_excludedFromRewards[user][msg.sender]) {
+      return;
+    }
+    totalSupply = _getAdjustedTotalSupply(msg.sender);
     _updateData(msg.sender, user, userBalance, totalSupply);
   }
 
@@ -192,11 +240,19 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
     address user
   ) internal view override returns (RewardsDataTypes.UserAssetBalance[] memory userAssetBalances) {
     userAssetBalances = new RewardsDataTypes.UserAssetBalance[](assets.length);
-    for (uint256 i = 0; i < assets.length; i++) {
-      userAssetBalances[i].asset = assets[i];
-      (userAssetBalances[i].userBalance, userAssetBalances[i].totalSupply) = IScaledBalanceToken(
-        assets[i]
-      ).getScaledUserBalanceAndSupply(user);
+    for (uint256 i = 0; i < assets.length;) {
+      address asset = assets[i];
+      userAssetBalances[i].asset = asset;
+      if (_excludedFromRewards[user][asset]) {
+        // Excluded users: set userBalance to 0 so that no new rewards accrue.
+        userAssetBalances[i].userBalance = 0;
+      } else {
+        userAssetBalances[i].userBalance = IScaledBalanceToken(asset).scaledBalanceOf(user);
+      }
+      userAssetBalances[i].totalSupply = _getAdjustedTotalSupply(asset);
+      unchecked {
+        ++i;
+      }
     }
     return userAssetBalances;
   }
@@ -351,5 +407,35 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
     require(rewardOracle.latestAnswer() > 0, 'ORACLE_MUST_RETURN_PRICE');
     _rewardOracle[reward] = rewardOracle;
     emit RewardOracleUpdated(reward, address(rewardOracle));
+  }
+
+  /**
+   * @dev Returns the adjusted total supply for an asset by subtracting
+   * the balances of all excluded addresses.
+   * @param asset The address of the asset.
+   */
+  function _getAdjustedTotalSupply(address asset) internal view override returns (uint256 adjustedTotalSupply) {
+    uint256 totalSupply = IScaledBalanceToken(asset).scaledTotalSupply();
+    uint256 excludedSupply = 0;
+    uint256 len = _excludedAddresses[asset].length;
+    for (uint256 i = 0; i < len;) {
+      // Only include an address if it's still excluded.
+      address excludedAddress = _excludedAddresses[asset][i];
+      if (_excludedFromRewards[excludedAddress][asset]) {
+        excludedSupply += IScaledBalanceToken(asset).scaledBalanceOf(excludedAddress);
+      }
+
+      unchecked {
+        ++i;
+      }
+    }
+    // Guard against underflow (in case all supply is excluded)
+    if (totalSupply > excludedSupply) {
+      unchecked {
+        adjustedTotalSupply = totalSupply - excludedSupply;
+      }
+    } else {
+      adjustedTotalSupply = 0;
+    }
   }
 }

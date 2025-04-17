@@ -63,7 +63,7 @@ abstract contract RewardsDistributor is IRewardsDistributor {
     return
       _getAssetIndex(
         rewardData,
-        IScaledBalanceToken(asset).scaledTotalSupply(),
+        _getAdjustedTotalSupply(asset),
         10 ** _assets[asset].decimals
       );
   }
@@ -196,7 +196,7 @@ abstract contract RewardsDistributor is IRewardsDistributor {
 
       (uint256 newIndex, ) = _updateRewardData(
         rewardConfig,
-        IScaledBalanceToken(asset).scaledTotalSupply(),
+        _getAdjustedTotalSupply(asset),
         10 ** decimals
       );
 
@@ -524,6 +524,13 @@ abstract contract RewardsDistributor is IRewardsDistributor {
     address[] calldata assets,
     address user
   ) internal view virtual returns (RewardsDataTypes.UserAssetBalance[] memory userAssetBalances);
+
+  /**
+   * @dev Returns the adjusted total supply for an asset by subtracting
+   * the balances of all excluded addresses.
+   * @param asset The address of the asset.
+   */
+  function _getAdjustedTotalSupply(address asset) internal view virtual returns (uint256 adjustedTotalSupply);
 
   /// @inheritdoc IRewardsDistributor
   function getAssetDecimals(address asset) external view returns (uint8) {
