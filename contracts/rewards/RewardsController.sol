@@ -127,10 +127,13 @@ contract RewardsController is RewardsDistributor, VersionedInitializable, IRewar
     bool excluded
   ) external onlyEmissionManager {
     if (excluded && !_excludedFromRewards[user][asset]) {
+      uint256 userBalance = IScaledBalanceToken(asset).scaledBalanceOf(user);
+      _updateData(asset, user, userBalance, _getAdjustedTotalSupply(asset));
       // If excluding and not already in the list, add the address.
       _excludedAddressIndex[user][asset] = _excludedAddresses[asset].length;
       _excludedAddresses[asset].push(user);
     } else if (!excluded && _excludedFromRewards[user][asset]) {
+      _updateData(asset, user, 0, _getAdjustedTotalSupply(asset));
       // If including and already in the list, remove the address from the list.
       uint256 index = _excludedAddressIndex[user][asset];
       uint256 lastIndex = _excludedAddresses[asset].length - 1;
